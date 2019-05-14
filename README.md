@@ -7,8 +7,9 @@ This app pretends to be a Cisco IOS-XR device for the purposes of testing with C
 Downloading & running the code:
 
 ```shell
-go get -u github.com/noelbundick/network-telemetry
+go get github.com/noelbundick/network-telemetry
 cd $GOPATH/src/github.com/noelbundick/network-telemetry
+go get ./...
 go run ./synthetic-router/main.go <options>
 ```
 
