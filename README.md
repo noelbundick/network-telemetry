@@ -26,5 +26,5 @@ Options:
 -serverAddr string
     The server host and port (default "127.0.0.1:10000")
 -type string
-    The data type to send. Can be one of [cpu, memory, env, routing] (default "cpu")
+    The data type to send. Can be one of [cpu, memory, interface, routing, counters] (default "cpu")
 ```

@@ -18,7 +18,9 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	telem "github.com/cisco/bigmuddy-network-telemetry-proto/proto_go"
+	generic_counters "github.com/cisco/bigmuddy-network-telemetry-proto/proto_go/cisco_ios_xr_infra_statsd_oper/infra_statistics/interfaces/interface/generic_counters"
 	memory "github.com/cisco/bigmuddy-network-telemetry-proto/proto_go/cisco_ios_xr_nto_misc_oper/memory_summary/nodes/node/summary"
+	interface_summary "github.com/cisco/bigmuddy-network-telemetry-proto/proto_go/cisco_ios_xr_pfi_im_cmd_oper/interfaces/interface_summary"
 	cpu "github.com/cisco/bigmuddy-network-telemetry-proto/proto_go/cisco_ios_xr_wdsysmon_fd_oper/system_monitoring/cpu_utilization"
 	dialout "github.com/cisco/bigmuddy-network-telemetry-proto/proto_go/mdt_grpc_dialout"
 )
@@ -28,7 +30,7 @@ var (
 	insecure   = flag.Bool("insecure", false, "If set, will use an insecure connection")
 	deviceName = flag.String("deviceName", "device1", "The device name to send")
 	baseCPU    = flag.Int("baseCPU", 10, "The base CPU percentage to simulate")
-	dataType   = flag.String("type", "cpu", "The data type to send. Can be one of [cpu, memory, env, routing]")
+	dataType   = flag.String("type", "cpu", "The data type to send. Can be one of [cpu, memory, interface, routing, counters]")
 	seconds    = flag.Int("seconds", 60, "Number of seconds to send data")
 	itemCount  = int32(0)
 	t1         time.Time
@@ -53,9 +55,81 @@ func getCPUData() (string, []byte, []byte) {
 	return path, detailBytes, keyBytes
 }
 
-func getEnvData() (string, []byte, []byte) {
-	log.Fatal("Not implemented")
-	return "", nil, nil
+func getGenericCountersData() (string, []byte, []byte) {
+	path := "Cisco-IOS-XR-infra-statsd-oper:infra-statistics/interfaces/interface/latest/generic-counters"
+
+	details := &generic_counters.IfstatsbagGeneric{
+		Applique:                       0,
+		AvailabilityFlag:               0,
+		BroadcastPacketsReceived:       0,
+		BroadcastPacketsSent:           0,
+		BytesReceived:                  0,
+		BytesSent:                      0,
+		CarrierTransitions:             0,
+		CrcErrors:                      0,
+		FramingErrorsReceived:          0,
+		GiantPacketsReceived:           0,
+		InputAborts:                    0,
+		InputDrops:                     0,
+		InputErrors:                    0,
+		InputIgnoredPackets:            0,
+		InputOverruns:                  0,
+		InputQueueDrops:                0,
+		LastDataTime:                   1557771568,
+		LastDiscontinuityTime:          1555302325,
+		MulticastPacketsReceived:       0,
+		MulticastPacketsSent:           0,
+		OutputBufferFailures:           0,
+		OutputBuffersSwappedOut:        0,
+		OutputDrops:                    0,
+		OutputErrors:                   0,
+		OutputQueueDrops:               0,
+		OutputUnderruns:                0,
+		PacketsReceived:                0,
+		PacketsSent:                    0,
+		ParityPacketsReceived:          0,
+		Resets:                         0,
+		RuntPacketsReceived:            0,
+		SecondsSinceLastClearCounters:  0,
+		SecondsSincePacketReceived:     4294967295,
+		SecondsSincePacketSent:         4294967295,
+		ThrottledPacketsReceived:       0,
+		UnknownProtocolPacketsReceived: 0,
+	}
+	detailBytes, _ := proto.Marshal(details)
+
+	keys := &generic_counters.IfstatsbagGeneric_KEYS{
+		InterfaceName: "Null0",
+	}
+	keyBytes, _ := proto.Marshal(keys)
+
+	return path, detailBytes, keyBytes
+}
+
+func getInterfaceData() (string, []byte, []byte) {
+	path := "Cisco-IOS-XR-pfi-im-cmd-oper:interfaces/interface-summary"
+
+	details := &interface_summary.ImIfSummaryInfo{
+		InterfaceCounts: &interface_summary.ImIfGroupCountsSt{
+			AdminDownInterfaceCount: 0,
+			DownInterfaceCount:      20,
+			InterfaceCount:          20,
+			UpInterfaceCount:        0,
+		},
+		InterfaceTypeList: []*interface_summary.ImIfTypeSummarySt{
+			&interface_summary.ImIfTypeSummarySt{
+				InterfaceCounts:          nil,
+				InterfaceTypeDescription: "GigabitEthernet",
+				InterfaceTypeName:        "IFT_GETHERNET",
+			},
+		},
+	}
+	detailBytes, _ := proto.Marshal(details)
+
+	keys := &interface_summary.ImIfSummaryInfo_KEYS{}
+	keyBytes, _ := proto.Marshal(keys)
+
+	return path, detailBytes, keyBytes
 }
 
 func getMemoryData() (string, []byte, []byte) {
@@ -115,13 +189,15 @@ func sendMessages(conn *grpc.ClientConn) {
 
 		switch *dataType {
 		case "cpu":
-			path, detailBytes, _ = getCPUData()
-		case "env":
-			path, detailBytes, _ = getEnvData()
+			path, detailBytes, keyBytes = getCPUData()
+		case "interface":
+			path, detailBytes, keyBytes = getInterfaceData()
 		case "memory":
-			path, detailBytes, _ = getMemoryData()
+			path, detailBytes, keyBytes = getMemoryData()
 		case "routing":
-			path, detailBytes, _ = getRoutingData()
+			path, detailBytes, keyBytes = getRoutingData()
+		case "counters":
+			path, detailBytes, keyBytes = getGenericCountersData()
 		}
 
 		now := time.Now()
