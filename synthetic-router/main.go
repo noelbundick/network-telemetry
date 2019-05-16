@@ -163,7 +163,7 @@ func getRoutingData() (string, []byte, []byte) {
 	return "", nil, nil
 }
 
-func sendMessages(conn *grpc.ClientConn) {
+func sendMessages(conn *grpc.ClientConn, c chan os.Signal) {
 	client := dialout.NewGRPCMdtDialoutClient(conn)
 	stream, err := client.MdtDialout(context.Background())
 
@@ -234,7 +234,7 @@ func sendMessages(conn *grpc.ClientConn) {
 
 		if *messagesToSend > 0 && i > *messagesToSend {
 			fmt.Println("message limit reached")
-			os.Exit(0)
+			c <- os.Interrupt
 		}
 	}
 }
@@ -278,5 +278,5 @@ func main() {
 	}()
 
 	t1 = time.Now()
-	sendMessages(conn)
+	sendMessages(conn, c)
 }
