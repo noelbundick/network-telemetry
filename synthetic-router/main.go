@@ -26,15 +26,16 @@ import (
 )
 
 var (
-	serverAddr = flag.String("serverAddr", "127.0.0.1:10000", "The server host and port")
-	insecure   = flag.Bool("insecure", false, "If set, will use an insecure connection")
-	deviceName = flag.String("deviceName", "device1", "The device name to send")
-	baseCPU    = flag.Int("baseCPU", 10, "The base CPU percentage to simulate")
-	dataType   = flag.String("type", "cpu", "The data type to send. Can be one of [cpu, memory, interface, routing, counters]")
-	seconds    = flag.Int("seconds", 60, "Number of seconds to send data")
-	itemCount  = int32(0)
-	t1         time.Time
-	t2         time.Time
+	serverAddr     = flag.String("serverAddr", "127.0.0.1:10000", "The server host and port")
+	insecure       = flag.Bool("insecure", false, "If set, will use an insecure connection")
+	deviceName     = flag.String("deviceName", "device1", "The device name to send")
+	baseCPU        = flag.Int("baseCPU", 20, "The base CPU percentage to simulate")
+	dataType       = flag.String("type", "cpu", "The data type to send. Can be one of [cpu, memory, interface, routing, counters]")
+	seconds        = flag.Int("seconds", 60, "Number of seconds to send data")
+	messagesToSend = flag.Int("messagesToSend", -1, "Total number of messages to send")
+	itemCount      = int32(0)
+	t1             time.Time
+	t2             time.Time
 )
 
 func getCPUData() (string, []byte, []byte) {
@@ -179,10 +180,8 @@ func sendMessages(conn *grpc.ClientConn) {
 		}
 	}()
 
-	var events []*dialout.MdtDialoutArgs
-	itemsPerBatch := 50
-	for i := 0; i < itemsPerBatch; i++ {
-
+	i := 0
+	for {
 		var path string
 		var detailBytes []byte
 		var keyBytes []byte
@@ -201,38 +200,41 @@ func sendMessages(conn *grpc.ClientConn) {
 		}
 
 		now := time.Now()
+		ts := uint64(now.UnixNano() / 1000000)
 		t := &telem.Telemetry{
 			NodeId:              &telem.Telemetry_NodeIdStr{NodeIdStr: *deviceName},
 			Subscription:        &telem.Telemetry_SubscriptionIdStr{SubscriptionIdStr: "test"},
 			EncodingPath:        path,
 			CollectionId:        uint64(i),
-			CollectionStartTime: uint64(now.UnixNano() / 1000000),
-			MsgTimestamp:        uint64(now.UnixNano() / 1000000),
-			CollectionEndTime:   uint64(now.UnixNano() / 1000000),
+			CollectionStartTime: ts,
+			MsgTimestamp:        ts,
+			CollectionEndTime:   ts,
 			DataGpb: &telem.TelemetryGPBTable{Row: []*telem.TelemetryRowGPB{
 				&telem.TelemetryRowGPB{
-					Timestamp: uint64(time.Now().UnixNano() / 1000000),
+					Timestamp: ts,
 					Content:   detailBytes,
 					Keys:      keyBytes,
 				},
 			}},
 		}
 		b, _ := proto.Marshal(t)
-		events = append(events, &dialout.MdtDialoutArgs{
+
+		ev := &dialout.MdtDialoutArgs{
 			ReqId: int64(i),
 			Data:  b,
-		})
-	}
-	for {
-		if err != nil {
-			log.Fatalf("could not open stream: %v", err)
 		}
 
-		for _, ev := range events {
-			if err = stream.Send(ev); err != nil {
-				log.Fatalf("%v.Send(%v) = %v", stream, ev, err)
-			}
-			atomic.AddInt32(&itemCount, int32(1))
+		if err = stream.Send(ev); err != nil {
+			log.Fatalf("%v.Send(%v) = %v", stream, ev, err)
+		}
+
+		atomic.AddInt32(&itemCount, int32(1))
+		i++
+		time.Sleep(1 * time.Millisecond)
+
+		if *messagesToSend > 0 && i > *messagesToSend {
+			fmt.Println("message limit reached")
+			os.Exit(0)
 		}
 	}
 }
